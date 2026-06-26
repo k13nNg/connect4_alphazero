@@ -1,7 +1,7 @@
+from .res_block import ResBlock
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from res_block import ResBlock
 
 class AlphaZeroNetwork(nn.Module):
     '''

@@ -37,9 +37,6 @@ class Connect4:
     A class that represents the game Connect4
     '''
 
-    def __init__():
-        pass
-
     def initial_state():
         '''
         Return a GameState object, representing the initial state of the game
