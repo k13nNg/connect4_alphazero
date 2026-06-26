@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 class ResBlock(nn.Module):
     '''
-    A class representing the residual block in ResNet, structured as described in AlphaGo Zero paper
+    A class representing the residual block in AlphaGo Zero's neural network, structured as described in AlphaGo Zero paper
 
     "
     Each residual block applies the following modules sequentially to its input:
@@ -18,12 +18,13 @@ class ResBlock(nn.Module):
     "
     '''
 
-    def __init__(self, in_planes=256, planes=256, stride=1):
+    def __init__(self, in_planes=256, planes=None, stride=1):
         super().__init__()
+        planes = planes or in_planes
 
         self.in_planes = in_planes
-        self.planes = planes
         self.stride = stride
+        self.planes = planes
 
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
