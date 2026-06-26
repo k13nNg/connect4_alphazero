@@ -61,7 +61,7 @@ class Connect4:
 
         return result
 
-    def make_move(current_state: GameState, col: int) -> GameState or bool:
+    def make_move(current_state: GameState, col: int) -> GameState | bool:
         '''
         Return: 
             - a GameState represents the state of the game after making move col in current_state, or
@@ -138,7 +138,7 @@ class Connect4:
 
         return result
 
-    def is_terminal(state: GameState, last_player: int) -> (bool, int):
+    def is_terminal(state: GameState, last_player: int) -> tuple[bool, int]:
         '''
         Return:
             - (True, 1) if last_player won the game 

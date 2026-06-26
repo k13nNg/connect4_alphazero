@@ -37,3 +37,7 @@ checkpoints/
 
 # Logs
 *.log
+
+# SLURM Submit Script and Logs
+submit_job.sh
+/slurm_logs
