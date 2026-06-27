@@ -1,4 +1,4 @@
-from network import AlphaZeroNetwork
+from neural_net.network import AlphaZeroNetwork
 import torch 
 
 net = AlphaZeroNetwork()
