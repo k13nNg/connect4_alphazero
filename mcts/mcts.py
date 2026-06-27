@@ -6,10 +6,11 @@ import numpy as np
 import torch
 
 class MCTS:
-    def __init__(self, game:GameState, network: AlphaZeroNetwork, config):
+    def __init__(self, game:GameState, network: AlphaZeroNetwork, config, device):
         self.game = game
         self.network = network
         self.config = config
+        self.device = device
 
     def search(self, root_state:GameState):
         '''
@@ -67,7 +68,7 @@ class MCTS:
         # encode the game state
         encoded_state = self.game.encode(state)
         # add the batch dimension before feeding the encoded state into the network
-        input_tensor = encoded_state.unsqueeze(0).float()
+        input_tensor = encoded_state.unsqueeze(0).float().to(self.device)
 
         logits, value = self.network(input_tensor)
 
