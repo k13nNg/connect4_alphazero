@@ -1,10 +1,7 @@
+import json
 import gradio as gr
 import numpy as np
 import torch
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from game_engine.game import Connect4
 from neural_net.network import AlphaZeroNetwork
 from mcts.mcts import MCTS
@@ -23,78 +20,10 @@ state = {"current": Connect4.initial_state()}
 
 ROWS, COLS = 6, 7
 
-# palette
-BOARD_COLOR = "#1a6fbf"
-EMPTY_COLOR = "#1c2128"   # matches Gradio Base dark app background
-P1_COLOR    = "#e63946"   # player — red
-P2_COLOR    = "#ffd166"   # AI — yellow
-PANEL_BG    = "#1c2128"
 
-
-# ── board renderer ────────────────────────────────────────────────────────────
-
-def render_board(board):
-    fig, ax = plt.subplots(figsize=(7, 6.5))
-    fig.patch.set_facecolor(BOARD_COLOR)
-    ax.set_facecolor(BOARD_COLOR)
-
-    cell, pad = 1.0, 0.08
-
-    ax.add_patch(patches.FancyBboxPatch(
-        (-0.5, -0.5), COLS, ROWS,
-        boxstyle="round,pad=0.15", linewidth=0,
-        facecolor=BOARD_COLOR, zorder=0
-    ))
-
-    for r in range(ROWS):
-        for c in range(COLS):
-            val = board[r][c]
-            y   = ROWS - 1 - r
-
-            # shadow ring
-            ax.add_patch(patches.Circle(
-                (c, y), cell / 2 - pad + 0.03,
-                color="#000000", alpha=0.35, zorder=1
-            ))
-
-            color = P1_COLOR if val == 1 else (P2_COLOR if val == -1 else EMPTY_COLOR)
-            ax.add_patch(patches.Circle(
-                (c, y), cell / 2 - pad,
-                color=color, zorder=2
-            ))
-
-            # glare on filled discs
-            if val != 0:
-                ax.add_patch(patches.Circle(
-                    (c - 0.12, y + 0.12), (cell / 2 - pad) * 0.35,
-                    color="white", alpha=0.25, zorder=3
-                ))
-
-    # column labels centred below each column
-    for c in range(COLS):
-        ax.text(
-            c, -0.82, str(c),
-            ha="center", va="center",
-            fontsize=13, fontweight="bold",
-            color="#ffffff"
-        )
-
-    ax.set_xlim(-0.6, COLS - 0.4)
-    ax.set_ylim(-1.15, ROWS - 0.4)
-    ax.set_aspect("equal")
-    ax.axis("off")
-    plt.tight_layout(pad=0.2)
-    return fig
-
-
-# ── overall win probability ───────────────────────────────────────────────────
+# ── win probability ───────────────────────────────────────────────────────────
 
 def get_ai_win_prob(game_state) -> float:
-    """
-    Query the value head. Value is in [-1, 1] from the current player's POV.
-    After the AI moves it's the human's turn, so negate to get AI's view,
-    then map [-1, 1] → [0, 100].
-    """
     encoded = Connect4.encode(game_state).unsqueeze(0).float()
     with torch.no_grad():
         _, value = network(encoded)
@@ -102,129 +31,241 @@ def get_ai_win_prob(game_state) -> float:
     return (ai_value + 1) / 2 * 100
 
 
-def render_win_gauge(prob: float):
-    """
-    Horizontal progress bar showing AI win probability (0–100 %).
-    Left = player, right = AI. Fill colour shifts green → red with AI confidence.
-    """
-    fig, ax = plt.subplots(figsize=(4.2, 1.5))
-    fig.patch.set_facecolor(PANEL_BG)
-    ax.set_facecolor(PANEL_BG)
+# ── HTML renderers ────────────────────────────────────────────────────────────
 
-    frac = np.clip(prob / 100, 0, 1)
-    bar_h = 0.52
-    bar_y = 0.5 - bar_h / 2
+# Each renderer returns a self-contained HTML string.
+# All animation is done via CSS transitions on inline styles — the browser
+# interpolates smoothly whenever the style value changes.
 
-    # track
-    ax.add_patch(patches.FancyBboxPatch(
-        (0, bar_y), 100, bar_h,
-        boxstyle="round,pad=0.5",
-        linewidth=0, facecolor="#2a2a2a", zorder=1
-    ))
+_BOARD_STYLE = """
+<style>
+  .c4-board {
+    display: inline-grid;
+    grid-template-columns: repeat(7, 60px);
+    grid-template-rows: repeat(6, 60px);
+    gap: 6px;
+    background: #1a6fbf;
+    padding: 12px;
+    border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .c4-cell {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow       0.35s ease;
+    box-shadow: inset 0 3px 8px rgba(0,0,0,0.4);
+  }
+  .c4-cell.empty  { background-color: #1c2128; }
+  .c4-cell.p1     { background-color: #e63946;
+                     box-shadow: inset 0 3px 8px rgba(0,0,0,0.3),
+                                 inset -4px -4px 10px rgba(255,255,255,0.15); }
+  .c4-cell.p2     { background-color: #ffd166;
+                     box-shadow: inset 0 3px 8px rgba(0,0,0,0.3),
+                                 inset -4px -4px 10px rgba(255,255,255,0.2); }
+  .c4-labels {
+    display: grid;
+    grid-template-columns: repeat(7, 60px);
+    gap: 6px;
+    padding: 6px 12px 0;
+    text-align: center;
+  }
+  .c4-labels span {
+    font-size: 13px;
+    font-weight: bold;
+    color: #aaaaaa;
+    width: 60px;
+    display: inline-block;
+  }
+</style>
+"""
 
-    # player fill (left side, always red)
-    if frac < 1.0:
-        ax.add_patch(patches.FancyBboxPatch(
-            (0, bar_y), (1 - frac) * 100, bar_h,
-            boxstyle="round,pad=0.5",
-            linewidth=0, facecolor=P1_COLOR, zorder=2
-        ))
+def render_board(board) -> str:
+    cells = ""
+    for r in range(ROWS):
+        for c in range(COLS):
+            v = board[r][c]
+            cls = "p1" if v == 1 else ("p2" if v == -1 else "empty")
+            cells += f'<div class="c4-cell {cls}"></div>\n'
 
-    # AI fill (right side, yellow)
-    if frac > 0.0:
-        ai_x = (1 - frac) * 100
-        ax.add_patch(patches.FancyBboxPatch(
-            (ai_x, bar_y), frac * 100, bar_h,
-            boxstyle="round,pad=0.5",
-            linewidth=0, facecolor=P2_COLOR, zorder=2
-        ))
+    labels = "".join(f'<span>{c}</span>' for c in range(COLS))
 
-    # centre divider line
-    ax.plot([50, 50], [bar_y - 0.06, bar_y + bar_h + 0.06],
-            color="#0d0d0d", lw=1.5, zorder=3)
-
-    # labels inside the bar
-    ax.text(25, 0.5, f"You  {(1-frac)*100:.0f}%",
-            ha="center", va="center",
-            fontsize=10, fontweight="bold", color="#ffffff", zorder=4)
-    ax.text(75, 0.5, f"AI  {prob:.0f}%",
-            ha="center", va="center",
-            fontsize=10, fontweight="bold", color="#0d1117", zorder=4)
-
-    ax.set_title("Winning confidence", fontsize=10, fontweight="bold",
-                 color="#aaaaaa", pad=6)
-
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0, 1)
-    ax.axis("off")
-    plt.tight_layout(pad=0.3)
-    return fig
+    return f"""
+{_BOARD_STYLE}
+<div style="display:flex; justify-content:center;">
+  <div style="display:inline-block;">
+    <div class="c4-board">{cells}</div>
+    <div class="c4-labels">{labels}</div>
+  </div>
+</div>
+"""
 
 
-# ── AlphaGo-style per-move confidence chart ───────────────────────────────────
+_WIN_BAR_STYLE = """
+<style>
+  .win-wrap {
+    padding: 8px 0 4px;
+  }
+  .win-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: 6px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .win-track {
+    position: relative;
+    width: 100%;
+    height: 32px;
+    background: #2a2a2a;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  /* player fill grows from left */
+  .win-player {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: #e63946;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 6px 0 0 6px;
+  }
+  /* AI fill grows from right */
+  .win-ai {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    background: #ffd166;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 0 6px 6px 0;
+  }
+  .win-divider {
+    position: absolute;
+    left: 50%; top: 0; bottom: 0;
+    width: 2px;
+    background: #0d1117;
+    transform: translateX(-50%);
+    z-index: 2;
+  }
+  .win-label-left, .win-label-right {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .win-label-left  { left: 8px;  color: #fff; }
+  .win-label-right { right: 8px; color: #0d1117; }
+</style>
+"""
 
-def render_move_confidence(visits: np.ndarray | None):
-    """
-    Vertical bar chart — one bar per column, height = share of MCTS visits.
-    Best move highlighted in yellow, matching AlphaGo/AlphaZero style.
-    """
-    fig, ax = plt.subplots(figsize=(4.2, 3.8))
-    fig.patch.set_facecolor(PANEL_BG)
-    ax.set_facecolor(PANEL_BG)
+def render_win_bar(prob: float) -> str:
+    ai_pct     = round(np.clip(prob, 0, 100), 1)
+    player_pct = round(100 - ai_pct, 1)
 
-    col_indices = np.arange(COLS)
+    return f"""
+{_WIN_BAR_STYLE}
+<div class="win-wrap">
+  <div class="win-title">Winning confidence</div>
+  <div class="win-track">
+    <div class="win-player" style="width:{player_pct}%"></div>
+    <div class="win-ai"     style="width:{ai_pct}%"></div>
+    <div class="win-divider"></div>
+    <span class="win-label-left">You {player_pct:.0f}%</span>
+    <span class="win-label-right">AI {ai_pct:.0f}%</span>
+  </div>
+</div>
+"""
 
+
+_CONF_STYLE = """
+<style>
+  .conf-wrap {
+    padding: 4px 0;
+  }
+  .conf-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: 8px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .conf-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+  }
+  .conf-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  .conf-pct {
+    font-size: 10px;
+    font-weight: bold;
+    color: #ccc;
+    min-height: 14px;
+  }
+  .conf-bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.3s ease;
+    min-height: 2px;
+  }
+  .conf-bar.best { background-color: #ffd166; }
+  .conf-bar.rest { background-color: #3a7bd5; }
+  .conf-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #aaa;
+    padding-top: 4px;
+    border-top: 1px solid #2a2a2a;
+    width: 100%;
+    text-align: center;
+  }
+</style>
+"""
+
+def render_move_confidence(visits: np.ndarray | None) -> str:
     if visits is None or visits.sum() == 0:
         probs = np.zeros(COLS)
+        best  = -1
     else:
         probs = visits / visits.sum()
+        best  = int(np.argmax(probs))
 
-    best = int(np.argmax(probs)) if probs.sum() > 0 else -1
+    max_h = 88   # px — max bar height
 
-    bar_colors = [
-        P2_COLOR if (c == best and probs[c] > 0) else "#3a7bd5"
-        for c in range(COLS)
-    ]
+    cols_html = ""
+    for c in range(COLS):
+        p      = probs[c]
+        h      = max(2, int(p * max_h))
+        cls    = "best" if c == best and p > 0 else "rest"
+        pct    = f"{p*100:.0f}%" if p > 0.01 else ""
+        cols_html += f"""
+      <div class="conf-col">
+        <span class="conf-pct">{pct}</span>
+        <div class="conf-bar {cls}" style="height:{h}px"></div>
+        <div class="conf-label">{c}</div>
+      </div>"""
 
-    bars = ax.bar(
-        col_indices, probs,
-        color=bar_colors,
-        width=0.62,
-        zorder=2,
-        edgecolor="none",
-    )
-
-    # percentage label above each bar
-    for c, (bar, p) in enumerate(zip(bars, probs)):
-        if p > 0.01:
-            ax.text(
-                c, p + 0.012,
-                f"{p * 100:.0f}%",
-                ha="center", va="bottom",
-                fontsize=9, fontweight="bold",
-                color="#ffffff"
-            )
-
-    ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(xmax=1, decimals=0))
-    ax.set_ylim(0, max(probs.max() * 1.25, 0.15))
-    ax.set_xlim(-0.6, COLS - 0.4)
-    ax.set_xticks(col_indices)
-    ax.set_xticklabels([str(c) for c in col_indices],
-                       fontsize=11, fontweight="bold", color="#cccccc")
-    ax.tick_params(axis="y", colors="#666666", labelsize=8)
-    ax.tick_params(axis="x", length=0)
-    ax.yaxis.grid(True, color="#2a2a2a", linewidth=0.8, zorder=0)
-    ax.set_axisbelow(True)
-
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-    ax.set_title("AI move confidence", fontsize=11, fontweight="bold",
-                 color="#aaaaaa", pad=8)
-    ax.set_xlabel("Column", fontsize=9, color="#888888", labelpad=4)
-
-    plt.tight_layout(pad=0.5)
-    return fig
+    return f"""
+{_CONF_STYLE}
+<div class="conf-wrap">
+  <div class="conf-title">AI move confidence</div>
+  <div class="conf-chart">{cols_html}
+  </div>
+</div>
+"""
 
 
 # ── game logic ────────────────────────────────────────────────────────────────
@@ -235,7 +276,7 @@ def player_move(col: int):
     if col not in Connect4.get_legal_moves(s):
         return (render_board(s.board),
                 render_move_confidence(None),
-                render_win_gauge(get_ai_win_prob(s)),
+                render_win_bar(get_ai_win_prob(s)),
                 "Illegal move! Column is full.")
 
     # player move
@@ -247,7 +288,7 @@ def player_move(col: int):
     if done:
         state["current"] = Connect4.initial_state()
         msg = "You win! 🎉 Board reset." if value == 1 else "Draw! Board reset."
-        return render_board(s.board), render_move_confidence(None), render_win_gauge(0), msg
+        return render_board(s.board), render_move_confidence(None), render_win_bar(0), msg
 
     # AI move — capture visit distribution before committing
     visits      = mcts.search(s)
@@ -257,14 +298,18 @@ def player_move(col: int):
     state["current"] = s
 
     done, value = Connect4.is_terminal(s, last_player)
-    confidence  = render_move_confidence(visits)
-    gauge       = render_win_gauge(get_ai_win_prob(s))
 
     if done:
         state["current"] = Connect4.initial_state()
-        return render_board(s.board), confidence, render_win_gauge(100), f"AI wins! 😈 (played col {ai_col}) Board reset."
+        return (render_board(s.board),
+                render_move_confidence(visits),
+                render_win_bar(100),
+                f"AI wins! 😈 (played col {ai_col}) Board reset.")
 
-    return render_board(s.board), confidence, gauge, f"AI played column {ai_col}"
+    return (render_board(s.board),
+            render_move_confidence(visits),
+            render_win_bar(get_ai_win_prob(s)),
+            f"AI played column {ai_col}")
 
 
 def reset():
@@ -272,7 +317,7 @@ def reset():
     return (
         render_board(state["current"].board),
         render_move_confidence(None),
-        render_win_gauge(50),
+        render_win_bar(50),
         "Game reset! Your turn. (You are 🔴, AI is 🟡)"
     )
 
@@ -291,15 +336,14 @@ CSS = """
 """
 
 with gr.Blocks(theme=gr.themes.Base(), css=CSS) as demo:
-    gr.Markdown("# Connect Four — AlphaZero")
+    gr.Markdown("# Connect Four — AlphaZero &nbsp;&nbsp; [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/k13nNg/connect4_alphazero)")
 
     with gr.Row(equal_height=False):
 
         # ── left: board + drop buttons ─────────────────────────────────────
         with gr.Column(scale=5):
-            board_display = gr.Plot(
-                value=render_board(Connect4.initial_state().board),
-                label="Board"
+            board_display = gr.HTML(
+                value=render_board(Connect4.initial_state().board)
             )
             with gr.Row(equal_height=True):
                 col_buttons = [
@@ -307,15 +351,13 @@ with gr.Blocks(theme=gr.themes.Base(), css=CSS) as demo:
                     for c in range(COLS)
                 ]
 
-        # ── right: confidence chart, win gauge, status, reset ─────────────
+        # ── right: move confidence, win bar, status, reset ─────────────────
         with gr.Column(scale=3):
-            confidence_display = gr.Plot(
-                value=render_move_confidence(None),
-                label="AI move confidence"
+            confidence_display = gr.HTML(
+                value=render_move_confidence(None)
             )
-            gauge_display = gr.Plot(
-                value=render_win_gauge(50),
-                label="AI winning confidence"
+            win_bar_display = gr.HTML(
+                value=render_win_bar(50)
             )
             status = gr.Textbox(
                 label="Status",
@@ -325,7 +367,7 @@ with gr.Blocks(theme=gr.themes.Base(), css=CSS) as demo:
             )
             reset_btn = gr.Button("🔄 Reset", variant="secondary")
 
-    outputs = [board_display, confidence_display, gauge_display, status]
+    outputs = [board_display, confidence_display, win_bar_display, status]
 
     for c, btn in enumerate(col_buttons):
         btn.click(fn=lambda col=c: player_move(col), outputs=outputs)
