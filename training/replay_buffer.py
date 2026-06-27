@@ -1,8 +1,9 @@
 from collections import deque
+from game_engine.game import Connect4
+
 import numpy as np
 import random
 import torch
-from game_engine.game import Connect4
 
 class ReplayBuffer:
     def __init__(self, max_size: int):

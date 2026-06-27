@@ -77,7 +77,7 @@ class MCTS:
 
         # make illegal moves
         legal_moves = self.game.get_legal_moves(state)
-        mask = torch.full((7,), -float('inf'))
+        mask = torch.full((7,), -float('inf'), device = self.device)
         
         # change the value of legal columns to zero
         for i in legal_moves:

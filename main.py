@@ -1,5 +1,3 @@
-import torch
-import os
 from game_engine.game import Connect4
 from neural_net.network import AlphaZeroNetwork
 from mcts.mcts import MCTS
@@ -8,6 +6,9 @@ from training.replay_buffer import ReplayBuffer
 from training.trainer import Trainer
 from training.evaluator import evaluate
 from config import Config
+
+import torch
+import os
 
 def main():
     config = Config()
@@ -43,7 +44,9 @@ def main():
         # 3. evaluate and save checkpoint every N iterations
         if iteration % config.EVAL_EVERY == 0:
             print("Evaluating...")
-            old_network = AlphaZeroNetwork(config.NUM_RES_BLOCKS, config.NUM_CHANNELS)
+            # old_network = AlphaZeroNetwork(config.NUM_RES_BLOCKS, config.NUM_CHANNELS)
+            old_network = AlphaZeroNetwork(config.NUM_RES_BLOCKS, config.NUM_CHANNELS).to(device)
+            old_network.load_state_dict(torch.load("checkpoints/best.pt", map_location=device))
             old_network.load_state_dict(
                 torch.load(f"checkpoints/best.pt")
             ) if os.path.exists("checkpoints/best.pt") else None
@@ -53,7 +56,7 @@ def main():
                 torch.save(network.state_dict(), "checkpoints/best.pt")
                 print("Saved initial checkpoint.")
             else:
-                is_better = evaluate(network, old_network, config)
+                is_better = evaluate(network, old_network, config, device)
                 if is_better:
                     torch.save(network.state_dict(), "checkpoints/best.pt")
                     print("New network is better! Checkpoint updated.")

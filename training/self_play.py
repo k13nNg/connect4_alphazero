@@ -1,9 +1,10 @@
-import numpy as np
-import torch
 from game_engine.game import Connect4, GameState
 from neural_net.network import AlphaZeroNetwork
 from mcts.mcts import MCTS
 from config import Config
+
+import numpy as np
+import torch
 
 def play_one_game(network: AlphaZeroNetwork, mcts: MCTS, config: Config) -> list:
     '''
