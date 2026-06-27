@@ -22,6 +22,8 @@ The training loop runs in three stages per iteration:
   <img width="527" height="466" alt="image" src="https://github.com/user-attachments/assets/ffb754ce-8420-46fe-91fd-93953abee97e" />
 </p>
 
+_Figure reproduced from [Silver et al., 2017](https://doi.org/10.1038/nature24270)_
+
 Over many iterations, the network and search progressively improve together.
 
 ## Training & Infrastructure
