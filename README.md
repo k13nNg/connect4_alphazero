@@ -1,4 +1,4 @@
-# Connect4 AlphaZero
+# Connect4 AlphaZero 🔴🟡
 
 A Python implementation of the AlphaZero algorithm applied to Connect4.
 
