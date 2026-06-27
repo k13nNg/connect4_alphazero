@@ -4,6 +4,8 @@ A Python implementation of the AlphaZero algorithm applied to Connect4.
 
 The goal is to train an agent that learns to play Connect4 at a strong level purely through self-play — no hardcoded strategies or human game data, just a neural network and a search algorithm improving each other over time.
 
+**Live Demo:** https://huggingface.co/spaces/K1n6/Connect4_AlphaZero
+
 ## How it works
 
 AlphaZero combines two components:
@@ -15,6 +17,10 @@ The training loop runs in three stages per iteration:
 1. **Self-play** — the current network plays games against itself, guided by MCTS, generating training data
 2. **Training** — the network is updated on the self-play data to better predict winning moves and outcomes
 3. **Evaluation** — the updated network is pitted against the previous best; it replaces the best model only if it wins convincingly
+
+<p align = "center">
+  <img width="527" height="466" alt="image" src="https://github.com/user-attachments/assets/ffb754ce-8420-46fe-91fd-93953abee97e" />
+</p>
 
 Over many iterations, the network and search progressively improve together.
 
