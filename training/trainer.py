@@ -5,9 +5,10 @@ from training.replay_buffer import ReplayBuffer
 from config import Config
 
 class Trainer:
-    def __init__(self, network: AlphaZeroNetwork, config: Config):
+    def __init__(self, network: AlphaZeroNetwork, config: Config, device):
         self.network = network
         self.config = config
+        self.device = device
         self.optimizer = torch.optim.Adam(  network.parameters(),
                                             lr = config.LEARNING_RATE, 
                                             weight_decay=config.WEIGHT_DECAY)   # Adam optimizer, use config.LEARNING_RATE and config.WEIGHT_DECAY
@@ -22,6 +23,11 @@ class Trainer:
         for epoch in range(self.config.NUM_EPOCHS):
             # 1. sample a minibatch
             states, policies, outcomes = replay_buffer.sample(self.config.BATCH_SIZE)
+
+            # move minibatches to GPU
+            states = states.to(self.device)
+            policies = policies.to(self.device)
+            outcomes = outcomes.to(self.device)
 
             # 2. forward pass
             pred_policies, pred_values = self.network.forward(states)
