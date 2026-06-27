@@ -1,13 +1,15 @@
-import numpy as np
-import torch
 from game_engine.game import Connect4
 from neural_net.network import AlphaZeroNetwork
 from mcts.mcts import MCTS
 from config import Config
 
+import numpy as np
+import torch
+
 def evaluate(new_network: AlphaZeroNetwork, 
              old_network: AlphaZeroNetwork, 
-             config: Config) -> bool:
+             config: Config,
+             device: str) -> bool:
     '''
     Play NUM_EVAL_GAMES games between new and old network.
     Return True if new network wins more than WIN_THRESHOLD of games.
@@ -16,8 +18,8 @@ def evaluate(new_network: AlphaZeroNetwork,
     old_wins = 0
     draws = 0
 
-    new_mcts = MCTS(Connect4, new_network, config)
-    old_mcts = MCTS(Connect4, old_network, config)
+    new_mcts = MCTS(Connect4, new_network, config, device)
+    old_mcts = MCTS(Connect4, old_network, config, device)
 
     for i in range(config.NUM_EVAL_GAMES):
         # alternate who plays first to remove first-mover advantage

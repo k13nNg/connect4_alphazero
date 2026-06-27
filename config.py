@@ -1,31 +1,33 @@
 class Config:
-    # Network
-    NUM_RES_BLOCKS = 5
-    NUM_CHANNELS = 256
+    # Network — smaller
+    NUM_RES_BLOCKS = 3
+    NUM_CHANNELS = 64
 
-    # MCTS
-    NUM_SIMULATIONS = 200
-    C_PUCT = 1.4
-    DIRICHLET_ALPHA = 0.3  
-    DIRICHLET_EPSILON = 0.25
-
-    # Self-play
-    NUM_SELF_PLAY_GAMES = 100
-    TEMPERATURE_THRESHOLD = 10
+    # MCTS — biggest speedup
+    NUM_SIMULATIONS = 100    # was 200
+    
+    # Self-play — fewer games
+    NUM_SELF_PLAY_GAMES = 30  # was 100
 
     # Training
     BATCH_SIZE = 128
     LEARNING_RATE = 0.001
     WEIGHT_DECAY = 1e-4
-    NUM_EPOCHS = 10
+    NUM_EPOCHS = 5            # was 10
 
     # Replay buffer
-    REPLAY_BUFFER_SIZE = 50_000
+    REPLAY_BUFFER_SIZE = 20_000  # was 50,000
 
     # Evaluation
-    NUM_EVAL_GAMES = 40
+    NUM_EVAL_GAMES = 20       # was 40
     WIN_THRESHOLD = 0.55
 
     # Main loop
-    NUM_ITERATIONS = 100
+    NUM_ITERATIONS = 50       # was 100
     EVAL_EVERY = 5
+
+    # MCTS
+    C_PUCT = 1.4
+    DIRICHLET_ALPHA = 0.3
+    DIRICHLET_EPSILON = 0.25
+    TEMPERATURE_THRESHOLD = 10
