@@ -19,7 +19,7 @@ The training loop runs in three stages per iteration:
 3. **Evaluation** — the updated network is pitted against the previous best; it replaces the best model only if it wins convincingly
 
 <p align = "center">
-  <img width="950" height="851" alt="image" src="https://github.com/user-attachments/assets/6a09c843-e612-44f1-9ff5-9bcb7b7cf8d7" />
+  <img width="650" height="551" alt="image" src="https://github.com/user-attachments/assets/6a09c843-e612-44f1-9ff5-9bcb7b7cf8d7" />
 </p>
 
 _Figure reproduced from [Silver et al., 2017](https://doi.org/10.1038/nature24270)_
