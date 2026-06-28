@@ -9,10 +9,12 @@ from config import Config
 
 import torch
 import os
+import json
+import pickle
 
 def main():
     config = Config()
-    device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # initialize
     network = AlphaZeroNetwork(config.NUM_RES_BLOCKS, config.NUM_CHANNELS).to(device)
@@ -20,19 +22,46 @@ def main():
     trainer = Trainer(network, config, device)
     mcts    = MCTS(Connect4, network, config, device)
 
+    # save buffer after each iteration
+    with open("checkpoints/buffer.pkl", "wb") as f:
+        pickle.dump(buffer, f)
+
     # create checkpoint directory
     os.makedirs("checkpoints", exist_ok=True)
 
-    for iteration in range(config.NUM_ITERATIONS):
-        print(f"--- Iteration {iteration + 1}/{config.NUM_ITERATIONS} ---")
+    # ── resume from checkpoint ──────────────────────────────
+    start_iteration = 0
+    checkpoint_path = "checkpoints/best.pt"
+    progress_path   = "checkpoints/progress.json"
+    # load buffer on resume
+    buffer_path = "checkpoints/buffer.pkl"
+    
+    if os.path.exists(buffer_path):
+        with open(buffer_path, "rb") as f:
+            buffer = pickle.load(f)
+        print(f"Loaded replay buffer: {len(buffer)} positions", flush=True)
+
+    if os.path.exists(checkpoint_path):
+        network.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        print(f"Loaded checkpoint from {checkpoint_path}")
+
+    if os.path.exists(progress_path):
+        with open(progress_path) as f:
+            progress = json.load(f)
+        start_iteration = progress["iteration"] + 1
+        print(f"Resuming from iteration {start_iteration}")
+    # ────────────────────────────────────────────────────────
+
+    for iteration in range(start_iteration, config.NUM_ITERATIONS):
+        print(f"--- Iteration {iteration + 1}/{config.NUM_ITERATIONS} ---", flush = True)
 
         # 1. self-play: generate training data
-        print("Self-play...")
+        print("Self-play...", flush = True)
         network.eval()
         for _ in range(config.NUM_SELF_PLAY_GAMES):
             game_data = play_one_game(network, mcts, config)
             buffer.add_game(game_data)
-        print(f"Buffer size: {len(buffer)}")
+        print(f"Buffer size: {len(buffer)}", flush = True)
 
         # 2. train: update network weights
         if len(buffer) >= config.BATCH_SIZE:
@@ -47,9 +76,6 @@ def main():
             # old_network = AlphaZeroNetwork(config.NUM_RES_BLOCKS, config.NUM_CHANNELS)
             old_network = AlphaZeroNetwork(config.NUM_RES_BLOCKS, config.NUM_CHANNELS).to(device)
             old_network.load_state_dict(torch.load("checkpoints/best.pt", map_location=device))
-            old_network.load_state_dict(
-                torch.load(f"checkpoints/best.pt")
-            ) if os.path.exists("checkpoints/best.pt") else None
 
             # save current as best if no checkpoint exists yet
             if not os.path.exists("checkpoints/best.pt"):
